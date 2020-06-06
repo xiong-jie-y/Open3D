@@ -9,6 +9,7 @@ set(BENCHMARK_SOURCE_FILES
     Geometry/SamplePoints.cpp
     Core/Reduction.cpp
     IO/PointCloudIO.cpp
+    TGeometry/PointCloud.cpp
 )
 
 add_executable(benchmarks ${BENCHMARK_SOURCE_FILES})
