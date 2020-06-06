@@ -36,17 +36,25 @@ namespace open3d {
 class TPointCloudFixture : public benchmark::Fixture {
 public:
     void SetUp(const benchmark::State& state) {
-        std::shared_ptr<geometry::PointCloud> pcd_old =
-                io::CreatePointCloudFromFile(std::string(TEST_DATA_DIR) +
-                                             "/fragment.pcd");
+        pcd_legacy_ = io::CreatePointCloudFromFile(std::string(TEST_DATA_DIR) +
+                                                   "/fragment.pcd");
         pcd_ = tgeometry::PointCloud::FromLegacyPointCloud(
-                *pcd_old, Dtype::Float32, Device("CUDA:0"));
+                *pcd_legacy_, Dtype::Float32, Device("CUDA:0"));
     }
 
     void TearDown(const benchmark::State& state) {}
 
+public:
+    std::shared_ptr<geometry::PointCloud> pcd_legacy_;
     tgeometry::PointCloud pcd_;
 };
+
+BENCHMARK_DEFINE_F(TPointCloudFixture, LegacyVoxelDownSample)
+(benchmark::State& state) {
+    for (auto _ : state) {
+        pcd_legacy_->VoxelDownSample(0.01);
+    }
+}
 
 BENCHMARK_DEFINE_F(TPointCloudFixture, VoxelDownSample)
 (benchmark::State& state) {
@@ -55,6 +63,6 @@ BENCHMARK_DEFINE_F(TPointCloudFixture, VoxelDownSample)
     }
 }
 
-BENCHMARK_REGISTER_F(TPointCloudFixture, VoxelDownSample);
+BENCHMARK_REGISTER_F(TPointCloudFixture, LegacyVoxelDownSample);
 
 }  // namespace open3d

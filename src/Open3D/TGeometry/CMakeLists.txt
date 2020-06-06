@@ -8,6 +8,3 @@ open3d_set_global_properties(TGeometry)
 open3d_link_3rdparty_libraries(TGeometry)
 
 target_include_directories(TGeometry PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
-
-add_executable(TestTPointCloud TestTPointCloud.cpp)
-target_link_libraries(TestTPointCloud ${CMAKE_PROJECT_NAME})
