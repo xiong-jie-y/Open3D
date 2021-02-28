@@ -9,6 +9,7 @@
 import pyrealsense2 as rs
 import numpy as np
 import cv2
+import open3d as o3d
 import argparse
 from os import makedirs
 from os.path import exists, join
@@ -112,7 +113,11 @@ if __name__ == "__main__":
         # note: using 640 x 480 depth resolution produces smooth depth boundaries
         #       using rs.format.bgr8 for color image format for OpenCV based image visualization
         config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30)
-        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+        config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
+
+        config.enable_stream(rs.stream.accel, rs.format.motion_xyz32f, 250)
+        config.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f, 200)
+
         if args.record_rosbag:
             config.enable_record_to_file(path_bag)
     if args.playback_rosbag:
@@ -142,6 +147,13 @@ if __name__ == "__main__":
 
     # Streaming loop
     frame_count = 0
+    intrinsic = None
+    previous_frame = None
+    import cupoch as cph
+
+    accs = []
+    gyros = []
+
     try:
         while True:
             # Get frameset of color and depth
@@ -154,6 +166,13 @@ if __name__ == "__main__":
             aligned_depth_frame = aligned_frames.get_depth_frame()
             color_frame = aligned_frames.get_color_frame()
 
+            acc = frames[2].as_motion_frame().get_motion_data()
+            gyro = frames[3].as_motion_frame().get_motion_data()
+            timestamp = frames[3].as_motion_frame().get_timestamp()
+
+            accs.append([acc.x, acc.y, acc.z])
+            gyros.append([timestamp, gyro.x, gyro.y, gyro.z])
+
             # Validate that both frames are valid
             if not aligned_depth_frame or not color_frame:
                 continue
@@ -161,17 +180,41 @@ if __name__ == "__main__":
             depth_image = np.asanyarray(aligned_depth_frame.get_data())
             color_image = np.asanyarray(color_frame.get_data())
 
+            # if previous_frame is not None:
+            #     option = cph.odometry.OdometryOption()
+            #     odo_init = np.identity(4)
+            #     print(option)
+
+            #     source_rgbd_image = previous_frame
+            #     target_rgbd_image = cph.geometry.RGBDImage.create_from_color_and_depth(
+            #         cph.geometry.Image(color_image), cph.geometry.Image(depth_image))
+
+            #     [success_hybrid_term, trans_hybrid_term,
+            #     info] = cph.odometry.compute_rgbd_odometry(
+            #         source_rgbd_image, target_rgbd_image, intrinsic, odo_init,
+            #         cph.odometry.RGBDOdometryJacobianFromHybridTerm(), option)
+
+            #     print(success_hybrid_term)
+            #     print(trans_hybrid_term)
+            #     if not success_hybrid_term:
+            #         import IPython; IPython.embed
+
             if args.record_imgs:
                 if frame_count == 0:
                     save_intrinsic_as_json(
                         join(args.output_folder, "camera_intrinsic.json"),
                         color_frame)
+                    intrinsic = cph.io.read_pinhole_camera_intrinsic(
+                        join(args.output_folder, "camera_intrinsic.json"))
                 cv2.imwrite("%s/%06d.png" % \
                         (path_depth, frame_count), depth_image)
                 cv2.imwrite("%s/%06d.jpg" % \
                         (path_color, frame_count), color_image)
                 print("Saved color + depth image %06d" % frame_count)
                 frame_count += 1
+
+            # previous_frame = cph.geometry.RGBDImage.create_from_color_and_depth(
+            #         cph.geometry.Image(color_image), cph.geometry.Image(depth_image))
 
             # Remove background - Set pixels further than clipping_distance to grey
             grey_color = 153
@@ -190,6 +233,10 @@ if __name__ == "__main__":
 
             # if 'esc' button pressed, escape loop and exit program
             if key == 27:
+                json.dump({
+                    "accs": accs,
+                    "gyros": gyros
+                }, open(join(args.output_folder, "imu.json"), "w"))
                 cv2.destroyAllWindows()
                 break
     finally:
